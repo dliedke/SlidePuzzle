@@ -1,5 +1,7 @@
 # 🎉 Slide Puzzle Divertido
 
+[Jogue agora! Acesse aqui](https://dliedke.github.io/SlidePuzzle/slidepuzzle.html)
+
 Um quebra-cabeça deslizante (slide puzzle) em JavaScript, HTML e CSS, com dicas otimizadas por IDA\* incremental e fallback guloso para garantir performance em dispositivos móveis e desktop.
 
 ## 📦 Estrutura do Projeto
