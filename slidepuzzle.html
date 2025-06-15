@@ -45,8 +45,7 @@
       box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     }
     #puzzle-container {
-      display: grid;
-      gap: 5px;
+      position: relative;
       background: linear-gradient(135deg, #1f2833, #3a4750);
       padding: 8px;
       border-radius: 12px;
@@ -54,6 +53,7 @@
       margin-bottom: 1.5rem;
     }
     .tile {
+      position: absolute;
       border-radius: 8px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.3);
       display: flex;
@@ -64,25 +64,28 @@
       color: #fff;
       user-select: none;
       background: linear-gradient(135deg, #4A90E2 0%, #357ABD 100%);
-      transition: transform 0.1s, background 0.3s;
+      transition: transform 0.1s, background 0.3s, left 0.3s ease-out, top 0.3s ease-out;
+      cursor: pointer;
     }
     .tile:hover {
       transform: translateY(-2px);
       box-shadow: 0 4px 8px rgba(0,0,0,0.5);
     }
+    .tile.moving {
+      z-index: 5;
+      transition: left 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
+                  top 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
     .hidden {
       background: transparent;
       box-shadow: none;
+      visibility: hidden;
     }
     .correct {
-      /* Gradiente verde suave */
       background: linear-gradient(135deg, #58D68D 0%, #2ECC71 100%) !important;
     }
     .hint {
-      /* Gradiente amarelo moderado */
       background: linear-gradient(135deg, #f4d03f 0%, #f1c40f 100%) !important;
-    } {
-      background: linear-gradient(135deg, #58D68D 0%, #2ECC71 100%) !important;
     }
     #info {
       background: rgba(0,0,0,0.6);
@@ -150,7 +153,7 @@
             dialogMoves = document.getElementById('dialog-moves'),
             dialogTime = document.getElementById('dialog-time'),
             dialogNew = document.getElementById('dialog-new-btn');
-      let size=3, board=[], emptyPos={r:0,c:0}, moveCount=0, timerInterval=null, hintsEnabled=false;
+      let size=3, board=[], emptyPos={r:0,c:0}, moveCount=0, timerInterval=null, hintsEnabled=false, cellSize=0, gap=5, isAnimating=false;
 
       sizeButtons.forEach(btn => btn.addEventListener('click', () => initGame(+btn.dataset.size)));
       newBtn.addEventListener('click', () => initGame(size));
@@ -164,7 +167,7 @@
         moveCount = 0;
         moveCountEl.textContent = '0';
         timerEl.textContent = '00:00';
-        // manter estado de dicas; atualizar texto conforme estado
+        isAnimating = false;
         toggleHintsBtn.textContent = hintsEnabled ? 'Desativar Dicas' : 'Ativar Dicas';
         dialog.classList.add('hidden');
         for(let i=0;i<size;i++){ board[i]=[]; for(let j=0;j<size;j++) board[i][j]=i*size+j+1; }
@@ -174,42 +177,126 @@
         startTimer(); render();
       }
 
+      function calculateSizes() {
+        const padding = 8;
+        const total = Math.min(window.innerWidth, window.innerHeight) * 0.8;
+        const inner = total - padding * 2;
+        cellSize = (inner - gap * (size - 1)) / size;
+        
+        container.style.width = `${total}px`;
+        container.style.height = `${total}px`;
+      }
+
+      function getPosition(r, c) {
+        return {
+          left: gap + c * (cellSize + gap),
+          top: gap + r * (cellSize + gap)
+        };
+      }
+
       function render(){
-        container.innerHTML='';
-        container.style.gridTemplateColumns=`repeat(${size},1fr)`;
-        const gap=5,padding=8,total=Math.min(window.innerWidth,window.innerHeight)*0.8,inner=total-padding*2,cellSize=(inner-gap*(size-1))/size;
-        container.style.width=container.style.height=`${total}px`;
-        let hintPos=null;
-        if(hintsEnabled){ hintPos=findNextMove(board.flat(),size)||computeGreedyHint(); }
-        board.forEach((row,i)=>row.forEach((v,j)=>{
-          const tile=document.createElement('div');tile.className='tile';
-          if(v===0) tile.classList.add('hidden'); else{
-            tile.textContent=v;
-            if(v===i*size+j+1) tile.classList.add('correct');
-            if(hintPos&&hintPos.r===i&&hintPos.c===j) tile.classList.add('hint');
+        calculateSizes();
+        
+        // Remove tiles that no longer exist
+        const currentTiles = container.querySelectorAll('.tile');
+        currentTiles.forEach(tile => {
+          const r = parseInt(tile.dataset.r);
+          const c = parseInt(tile.dataset.c);
+          const value = board[r] && board[r][c];
+          if (!value || value === 0) {
+            tile.remove();
           }
-          tile.style.width=tile.style.height=`${cellSize}px`;
-            // define posição para mover
+        });
+
+        let hintPos = null;
+        if(hintsEnabled){ 
+          hintPos = findNextMove(board.flat(), size) || computeGreedyHint(); 
+        }
+
+        board.forEach((row, i) => row.forEach((v, j) => {
+          if (v === 0) return; // Skip empty space
+
+          let tile = container.querySelector(`[data-r="${i}"][data-c="${j}"]`);
+          
+          if (!tile) {
+            // Create new tile
+            tile = document.createElement('div');
+            tile.className = 'tile';
             tile.dataset.r = i;
             tile.dataset.c = j;
-          tile.addEventListener('click',onTileClick);
-          container.appendChild(tile);
+            tile.textContent = v;
+            tile.style.width = `${cellSize}px`;
+            tile.style.height = `${cellSize}px`;
+            tile.addEventListener('click', onTileClick);
+            container.appendChild(tile);
+          } else {
+            // Update existing tile position if it moved
+            tile.dataset.r = i;
+            tile.dataset.c = j;
+            tile.textContent = v;
+          }
+
+          // Position the tile
+          const pos = getPosition(i, j);
+          tile.style.left = `${pos.left}px`;
+          tile.style.top = `${pos.top}px`;
+          tile.style.width = `${cellSize}px`;
+          tile.style.height = `${cellSize}px`;
+
+          // Apply styling
+          tile.className = 'tile';
+          if (v === i * size + j + 1) tile.classList.add('correct');
+          if (hintPos && hintPos.r === i && hintPos.c === j) tile.classList.add('hint');
         }));
       }
 
       function onTileClick(e){
-        const r=e.currentTarget.dataset.r|0,c=e.currentTarget.dataset.c|0;
+        if (isAnimating) return; // Prevent clicks during animation
+        
+        const r = parseInt(e.currentTarget.dataset.r);
+        const c = parseInt(e.currentTarget.dataset.c);
+        
         if(Math.abs(r-emptyPos.r)+Math.abs(c-emptyPos.c)===1){
-          swap(emptyPos,{r,c}); emptyPos={r,c};
-          moveCountEl.textContent=++moveCount;
+          animateMove(e.currentTarget, r, c, emptyPos.r, emptyPos.c);
+        }
+      }
+
+      function animateMove(tile, fromR, fromC, toR, toC) {
+        isAnimating = true;
+        
+        // Add moving class for better animation
+        tile.classList.add('moving');
+        
+        // Calculate target position
+        const targetPos = getPosition(toR, toC);
+        
+        // Start animation
+        tile.style.left = `${targetPos.left}px`;
+        tile.style.top = `${targetPos.top}px`;
+        
+        // Wait for animation to complete
+        setTimeout(() => {
+          // Update board state
+          swap(emptyPos, {r: fromR, c: fromC});
+          emptyPos = {r: fromR, c: fromC};
+          
+          moveCountEl.textContent = ++moveCount;
+          
+          // Remove moving class
+          tile.classList.remove('moving');
+          
+          // Re-render to update positions and check for completion
           render();
+          
           if(isSolved()){
             clearInterval(timerInterval);
-            dialogMoves.textContent=moveCount;
-            dialogTime.textContent=timerEl.textContent;
+            dialogMoves.textContent = moveCount;
+            dialogTime.textContent = timerEl.textContent;
             dialog.classList.remove('hidden');
           }
-        }
+          
+          isAnimating = false;
+        }, 300); // Match the CSS transition duration
       }
 
       function getNeighbors(r,c){ return [{r:-1,c:0},{r:1,c:0},{r:0,c:-1},{r:0,c:1}].map(d=>({r:r+d.r,c:c+d.c})).filter(p=>p.r>=0&&p.r<size&&p.c>=0&&p.c<size); }
@@ -246,6 +333,9 @@
         });
         return best;
       }
+
+      // Handle window resize to recalculate positions
+      window.addEventListener('resize', render);
 
       initGame(size);
     })();
