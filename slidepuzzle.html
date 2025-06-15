@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🧩 Quebra-Cabeça 🧩</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1rem;
+      background: linear-gradient(135deg, #2c3e50 0%, #4ca1af 100%);
+      min-height: 100vh;
+      color: #fff;
+    }
+    #title {
+      font-size: 2rem;
+      margin: 0.5rem 0;
+      color: #ecf0f1;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+    }
+    #controls {
+      margin-bottom: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .size-btn, #new-btn, #toggle-hints, #dialog-new-btn {
+      padding: 0.6rem 1.2rem;
+      font-size: 1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 30px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      background: #3498db;
+      color: #fff;
+    }
+    .size-btn:hover, #new-btn:hover, #toggle-hints:hover, #dialog-new-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+    #puzzle-container {
+      display: grid;
+      gap: 5px;
+      background: linear-gradient(135deg, #1f2833, #3a4750);
+      padding: 8px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      margin-bottom: 1.5rem;
+    }
+    .tile {
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8rem;
+      font-weight: bold;
+      color: #fff;
+      user-select: none;
+      background: linear-gradient(135deg, #4A90E2 0%, #357ABD 100%);
+      transition: transform 0.1s, background 0.3s;
+    }
+    .tile:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+    }
+    .hidden {
+      background: transparent;
+      box-shadow: none;
+    }
+    .correct {
+      /* Gradiente verde suave */
+      background: linear-gradient(135deg, #58D68D 0%, #2ECC71 100%) !important;
+    }
+    .hint {
+      /* Gradiente amarelo moderado */
+      background: linear-gradient(135deg, #f4d03f 0%, #f1c40f 100%) !important;
+    } {
+      background: linear-gradient(135deg, #58D68D 0%, #2ECC71 100%) !important;
+    }
+    #info {
+      background: rgba(0,0,0,0.6);
+      padding: 0.6rem 1.2rem;
+      border-radius: 30px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+      font-size: 1rem;
+      display: inline-block;
+      color: #fff;
+    }
+    #completion-dialog {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+    #completion-dialog.hidden { display: none; }
+    .dialog-content {
+      background: linear-gradient(135deg, #ffffff, #e6e6e6);
+      padding: 2rem;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .dialog-content h2 { margin-top: 0; color: #333; }
+    .dialog-content p {
+      font-size: 1.2rem;
+      margin: 0.5rem 0;
+      color: #555;
+    }
+    .dialog-content button { margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h1 id="title">🧩 Quebra-Cabeça 🧩</h1>
+  <div id="controls">
+    <button class="size-btn" data-size="3">3 × 3</button>
+    <button class="size-btn" data-size="4">4 × 4</button>
+    <button id="new-btn">Novo Jogo</button>
+    <button id="toggle-hints">Ativar Dicas</button>
+  </div>
+  <div id="puzzle-container"></div>
+  <div id="info">Movimentos: <span id="move-count">0</span> | Tempo: <span id="timer">00:00</span></div>
+  <div id="completion-dialog" class="hidden">
+    <div class="dialog-content">
+      <h2>Parabéns!</h2>
+      <p>Movimentos: <span id="dialog-moves">0</span></p>
+      <p>Tempo: <span id="dialog-time">00:00</span></p>
+      <button id="dialog-new-btn">Novo Jogo</button>
+    </div>
+  </div>
+  <script>
+    (function(){
+      const container = document.getElementById('puzzle-container'),
+            sizeButtons = document.querySelectorAll('.size-btn'),
+            newBtn = document.getElementById('new-btn'),
+            toggleHintsBtn = document.getElementById('toggle-hints'),
+            moveCountEl = document.getElementById('move-count'),
+            timerEl = document.getElementById('timer'),
+            dialog = document.getElementById('completion-dialog'),
+            dialogMoves = document.getElementById('dialog-moves'),
+            dialogTime = document.getElementById('dialog-time'),
+            dialogNew = document.getElementById('dialog-new-btn');
+      let size=3, board=[], emptyPos={r:0,c:0}, moveCount=0, timerInterval=null, hintsEnabled=false;
+
+      sizeButtons.forEach(btn => btn.addEventListener('click', () => initGame(+btn.dataset.size)));
+      newBtn.addEventListener('click', () => initGame(size));
+      toggleHintsBtn.addEventListener('click', ()=>{ hintsEnabled=!hintsEnabled; toggleHintsBtn.textContent = hintsEnabled? 'Desativar Dicas':'Ativar Dicas'; render(); });
+      dialogNew.addEventListener('click', ()=>{ initGame(size); dialog.classList.add('hidden'); });
+
+      function initGame(newSize){
+        size = newSize;
+        clearInterval(timerInterval);
+        board = [];
+        moveCount = 0;
+        moveCountEl.textContent = '0';
+        timerEl.textContent = '00:00';
+        // manter estado de dicas; atualizar texto conforme estado
+        toggleHintsBtn.textContent = hintsEnabled ? 'Desativar Dicas' : 'Ativar Dicas';
+        dialog.classList.add('hidden');
+        for(let i=0;i<size;i++){ board[i]=[]; for(let j=0;j<size;j++) board[i][j]=i*size+j+1; }
+        board[size-1][size-1]=0;
+        emptyPos={r:size-1,c:size-1};
+        for(let i=0;i<1000;i++){ const moves=getNeighbors(emptyPos.r,emptyPos.c); const m=moves[Math.floor(Math.random()*moves.length)]; swap(emptyPos,m); emptyPos={r:m.r,c:m.c}; }
+        startTimer(); render();
+      }
+
+      function render(){
+        container.innerHTML='';
+        container.style.gridTemplateColumns=`repeat(${size},1fr)`;
+        const gap=5,padding=8,total=Math.min(window.innerWidth,window.innerHeight)*0.8,inner=total-padding*2,cellSize=(inner-gap*(size-1))/size;
+        container.style.width=container.style.height=`${total}px`;
+        let hintPos=null;
+        if(hintsEnabled){ hintPos=findNextMove(board.flat(),size)||computeGreedyHint(); }
+        board.forEach((row,i)=>row.forEach((v,j)=>{
+          const tile=document.createElement('div');tile.className='tile';
+          if(v===0) tile.classList.add('hidden'); else{
+            tile.textContent=v;
+            if(v===i*size+j+1) tile.classList.add('correct');
+            if(hintPos&&hintPos.r===i&&hintPos.c===j) tile.classList.add('hint');
+          }
+          tile.style.width=tile.style.height=`${cellSize}px`;
+            // define posição para mover
+            tile.dataset.r = i;
+            tile.dataset.c = j;
+          tile.addEventListener('click',onTileClick);
+          container.appendChild(tile);
+        }));
+      }
+
+      function onTileClick(e){
+        const r=e.currentTarget.dataset.r|0,c=e.currentTarget.dataset.c|0;
+        if(Math.abs(r-emptyPos.r)+Math.abs(c-emptyPos.c)===1){
+          swap(emptyPos,{r,c}); emptyPos={r,c};
+          moveCountEl.textContent=++moveCount;
+          render();
+          if(isSolved()){
+            clearInterval(timerInterval);
+            dialogMoves.textContent=moveCount;
+            dialogTime.textContent=timerEl.textContent;
+            dialog.classList.remove('hidden');
+          }
+        }
+      }
+
+      function getNeighbors(r,c){ return [{r:-1,c:0},{r:1,c:0},{r:0,c:-1},{r:0,c:1}].map(d=>({r:r+d.r,c:c+d.c})).filter(p=>p.r>=0&&p.r<size&&p.c>=0&&p.c<size); }
+      function swap(a,b){ [board[a.r][a.c],board[b.r][b.c]]=[board[b.r][b.c],board[a.r][a.c]]; }
+      function isSolved(){ return board.every((row,i)=>row.every((v,j)=>v===((i*size+j+1)%(size*size)))); }
+      function startTimer(){ const start=Date.now(); timerInterval=setInterval(()=>{ const d=Date.now()-start; timerEl.textContent=`${String(Math.floor(d/60000)).padStart(2,'0')}:${String(Math.floor((d/1000)%60)).padStart(2,'0')}`; },1000); }
+
+      function findNextMove(arr,n){
+        const manh=a=>a.reduce((s,v,i)=>v?s+Math.abs(Math.floor(i/n)-Math.floor((v-1)/n))+Math.abs(i%n-((v-1)%n)):s,0);
+        const dirs=[{r:-1,c:0},{r:1,c:0},{r:0,c:-1},{r:0,c:1}];
+        let bound=manh(arr),path=[];
+        function dfs(st,zr,zc,g,prev){
+          const h=manh(st),f=g+h; if(f>bound) return f; if(h===0) return 'FOUND'; let min=Infinity;
+          for(let dir=0;dir<4;dir++){
+            if(prev>=0&&(prev^1)===dir) continue;
+            const nr=zr+dirs[dir].r,nc=zc+dirs[dir].c;
+            if(nr<0||nr>=n||nc<0||nc>=n) continue;
+            const idx0=zr*n+zc,idx1=nr*n+nc; const next=st.slice(); [next[idx0],next[idx1]]=[next[idx1],next[idx0]];
+            const t=dfs(next,nr,nc,g+1,dir); if(t==='FOUND'){ if(g===0) path.push({r:nr,c:nc}); return 'FOUND'; } if(typeof t==='number'&&t<min) min=t;
+          }
+          return min;
+        }
+        const stArr=arr.slice(),zIdx=stArr.indexOf(0),zr0=Math.floor(zIdx/n),zc0=zIdx%n;
+        while(true){ const t=dfs(stArr,zr0,zc0,0,-1); if(t==='FOUND') break; if(t===Infinity) return null; bound=t; }
+        return path[0];
+      }
+
+      function computeGreedyHint(){
+        const flat=board.flat(),manh=a=>a.reduce((s,v,i)=>v?s+Math.abs(Math.floor(i/size)-Math.floor((v-1)/size))+Math.abs(i%size-((v-1)%size)):s,0);
+        let best=null,bestH=Infinity;
+        getNeighbors(emptyPos.r,emptyPos.c).forEach(p=>{
+          const copy=flat.slice(),i0=emptyPos.r*size+emptyPos.c,i1=p.r*size+p.c; [copy[i0],copy[i1]]=[copy[i1],copy[i0]];
+          const h=manh(copy); if(h<bestH){bestH=h;best=p;}
+        });
+        return best;
+      }
+
+      initGame(size);
+    })();
+  </script>
+</body>
+</html>
