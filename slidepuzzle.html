@@ -143,201 +143,459 @@
   </div>
   <script>
     (function(){
-      const container = document.getElementById('puzzle-container'),
-            sizeButtons = document.querySelectorAll('.size-btn'),
-            newBtn = document.getElementById('new-btn'),
-            toggleHintsBtn = document.getElementById('toggle-hints'),
-            moveCountEl = document.getElementById('move-count'),
-            timerEl = document.getElementById('timer'),
-            dialog = document.getElementById('completion-dialog'),
-            dialogMoves = document.getElementById('dialog-moves'),
-            dialogTime = document.getElementById('dialog-time'),
-            dialogNew = document.getElementById('dialog-new-btn');
-      let size=3, board=[], emptyPos={r:0,c:0}, moveCount=0, timerInterval=null, hintsEnabled=false, cellSize=0, gap=5, isAnimating=false;
+      // DOM Elements
+      const puzzleContainer = document.getElementById('puzzle-container');
+      const sizeButtons = document.querySelectorAll('.size-btn');
+      const newGameButton = document.getElementById('new-btn');
+      const toggleHintsButton = document.getElementById('toggle-hints');
+      const moveCountElement = document.getElementById('move-count');
+      const timerElement = document.getElementById('timer');
+      const completionDialog = document.getElementById('completion-dialog');
+      const dialogMovesElement = document.getElementById('dialog-moves');
+      const dialogTimeElement = document.getElementById('dialog-time');
+      const dialogNewGameButton = document.getElementById('dialog-new-btn');
 
-      sizeButtons.forEach(btn => btn.addEventListener('click', () => initGame(+btn.dataset.size)));
-      newBtn.addEventListener('click', () => initGame(size));
-      toggleHintsBtn.addEventListener('click', ()=>{ hintsEnabled=!hintsEnabled; toggleHintsBtn.textContent = hintsEnabled? 'Desativar Dicas':'Ativar Dicas'; render(); });
-      dialogNew.addEventListener('click', ()=>{ initGame(size); dialog.classList.add('hidden'); });
+      // Game State Variables
+      let puzzleSize = 3;
+      let gameBoard = [];
+      let emptyTilePosition = { row: 0, column: 0 };
+      let moveCount = 0;
+      let gameTimer = null;
+      let hintsEnabled = false;
+      let tileSize = 0;
+      let tileGap = 5;
+      let isAnimating = false;
 
-      function initGame(newSize){
-        size = newSize;
-        clearInterval(timerInterval);
-        board = [];
+      // Event Listeners
+      sizeButtons.forEach(button => {
+        button.addEventListener('click', () => {
+          const newSize = parseInt(button.dataset.size);
+          initializeGame(newSize);
+        });
+      });
+
+      newGameButton.addEventListener('click', () => initializeGame(puzzleSize));
+      
+      toggleHintsButton.addEventListener('click', toggleHints);
+      
+      dialogNewGameButton.addEventListener('click', () => {
+        initializeGame(puzzleSize);
+        completionDialog.classList.add('hidden');
+      });
+
+      // Initialize a new game
+      function initializeGame(newSize) {
+        puzzleSize = newSize;
+        clearInterval(gameTimer);
+        gameBoard = [];
         moveCount = 0;
-        moveCountEl.textContent = '0';
-        timerEl.textContent = '00:00';
+        moveCountElement.textContent = '0';
+        timerElement.textContent = '00:00';
         isAnimating = false;
-        toggleHintsBtn.textContent = hintsEnabled ? 'Desativar Dicas' : 'Ativar Dicas';
-        dialog.classList.add('hidden');
-        for(let i=0;i<size;i++){ board[i]=[]; for(let j=0;j<size;j++) board[i][j]=i*size+j+1; }
-        board[size-1][size-1]=0;
-        emptyPos={r:size-1,c:size-1};
-        for(let i=0;i<1000;i++){ const moves=getNeighbors(emptyPos.r,emptyPos.c); const m=moves[Math.floor(Math.random()*moves.length)]; swap(emptyPos,m); emptyPos={r:m.r,c:m.c}; }
-        startTimer(); render();
-      }
-
-      function calculateSizes() {
-        const padding = 8;
-        const total = Math.min(window.innerWidth, window.innerHeight) * 0.8;
-        const inner = total - padding * 2;
-        cellSize = (inner - gap * (size - 1)) / size;
+        updateHintsButtonText();
+        completionDialog.classList.add('hidden');
         
-        container.style.width = `${total}px`;
-        container.style.height = `${total}px`;
+        createSolvedBoard();
+        shuffleBoard();
+        startGameTimer();
+        renderPuzzle();
       }
 
-      function getPosition(r, c) {
+      // Create the initial solved board
+      function createSolvedBoard() {
+        for (let row = 0; row < puzzleSize; row++) {
+          gameBoard[row] = [];
+          for (let column = 0; column < puzzleSize; column++) {
+            gameBoard[row][column] = row * puzzleSize + column + 1;
+          }
+        }
+        // Set the last tile as empty (0)
+        gameBoard[puzzleSize - 1][puzzleSize - 1] = 0;
+        emptyTilePosition = { row: puzzleSize - 1, column: puzzleSize - 1 };
+      }
+
+      // Shuffle the board by making random valid moves
+      function shuffleBoard() {
+        for (let i = 0; i < 1000; i++) {
+          const possibleMoves = getAdjacentPositions(emptyTilePosition.row, emptyTilePosition.column);
+          const randomMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+          swapTiles(emptyTilePosition, randomMove);
+          emptyTilePosition = { row: randomMove.row, column: randomMove.column };
+        }
+      }
+
+      // Toggle hints on/off
+      function toggleHints() {
+        hintsEnabled = !hintsEnabled;
+        updateHintsButtonText();
+        renderPuzzle();
+      }
+
+      // Update the hints button text
+      function updateHintsButtonText() {
+        toggleHintsButton.textContent = hintsEnabled ? 'Desativar Dicas' : 'Ativar Dicas';
+      }
+
+      // Calculate tile sizes based on screen size
+      function calculateTileSizes() {
+        const containerPadding = 8;
+        const maxContainerSize = Math.min(window.innerWidth, window.innerHeight) * 0.8;
+        const availableSpace = maxContainerSize - containerPadding * 2;
+        tileSize = (availableSpace - tileGap * (puzzleSize - 1)) / puzzleSize;
+        
+        puzzleContainer.style.width = `${maxContainerSize}px`;
+        puzzleContainer.style.height = `${maxContainerSize}px`;
+      }
+
+      // Get the pixel position for a tile at given row/column
+      function getTilePosition(row, column) {
         return {
-          left: gap + c * (cellSize + gap),
-          top: gap + r * (cellSize + gap)
+          left: tileGap + column * (tileSize + tileGap),
+          top: tileGap + row * (tileSize + tileGap)
         };
       }
 
-      function render(){
-        calculateSizes();
+      // Render the entire puzzle
+      function renderPuzzle() {
+        calculateTileSizes();
+        removeObsoleteTiles();
         
-        // Remove tiles that no longer exist
-        const currentTiles = container.querySelectorAll('.tile');
+        const hintPosition = hintsEnabled ? findBestHintPosition() : null;
+
+        // Create or update tiles for each position
+        for (let row = 0; row < puzzleSize; row++) {
+          for (let column = 0; column < puzzleSize; column++) {
+            const tileValue = gameBoard[row][column];
+            if (tileValue === 0) continue; // Skip empty space
+
+            let tileElement = findExistingTile(row, column);
+            
+            if (!tileElement) {
+              tileElement = createNewTile(row, column, tileValue);
+            } else {
+              updateExistingTile(tileElement, row, column, tileValue);
+            }
+
+            positionTile(tileElement, row, column);
+            applyTileStyles(tileElement, row, column, tileValue, hintPosition);
+          }
+        }
+      }
+
+      // Remove tiles that no longer exist on the board
+      function removeObsoleteTiles() {
+        const currentTiles = puzzleContainer.querySelectorAll('.tile');
         currentTiles.forEach(tile => {
-          const r = parseInt(tile.dataset.r);
-          const c = parseInt(tile.dataset.c);
-          const value = board[r] && board[r][c];
-          if (!value || value === 0) {
+          const row = parseInt(tile.dataset.r);
+          const column = parseInt(tile.dataset.c);
+          const tileValue = gameBoard[row] && gameBoard[row][column];
+          if (!tileValue || tileValue === 0) {
             tile.remove();
           }
         });
-
-        let hintPos = null;
-        if(hintsEnabled){ 
-          hintPos = findNextMove(board.flat(), size) || computeGreedyHint(); 
-        }
-
-        board.forEach((row, i) => row.forEach((v, j) => {
-          if (v === 0) return; // Skip empty space
-
-          let tile = container.querySelector(`[data-r="${i}"][data-c="${j}"]`);
-          
-          if (!tile) {
-            // Create new tile
-            tile = document.createElement('div');
-            tile.className = 'tile';
-            tile.dataset.r = i;
-            tile.dataset.c = j;
-            tile.textContent = v;
-            tile.style.width = `${cellSize}px`;
-            tile.style.height = `${cellSize}px`;
-            tile.addEventListener('click', onTileClick);
-            container.appendChild(tile);
-          } else {
-            // Update existing tile position if it moved
-            tile.dataset.r = i;
-            tile.dataset.c = j;
-            tile.textContent = v;
-          }
-
-          // Position the tile
-          const pos = getPosition(i, j);
-          tile.style.left = `${pos.left}px`;
-          tile.style.top = `${pos.top}px`;
-          tile.style.width = `${cellSize}px`;
-          tile.style.height = `${cellSize}px`;
-
-          // Apply styling
-          tile.className = 'tile';
-          if (v === i * size + j + 1) tile.classList.add('correct');
-          if (hintPos && hintPos.r === i && hintPos.c === j) tile.classList.add('hint');
-        }));
       }
 
-      function onTileClick(e){
+      // Find existing tile element for given position
+      function findExistingTile(row, column) {
+        return puzzleContainer.querySelector(`[data-r="${row}"][data-c="${column}"]`);
+      }
+
+      // Create a new tile element
+      function createNewTile(row, column, value) {
+        const tile = document.createElement('div');
+        tile.className = 'tile';
+        tile.dataset.r = row;
+        tile.dataset.c = column;
+        tile.textContent = value;
+        tile.addEventListener('click', handleTileClick);
+        puzzleContainer.appendChild(tile);
+        return tile;
+      }
+
+      // Update an existing tile element
+      function updateExistingTile(tile, row, column, value) {
+        tile.dataset.r = row;
+        tile.dataset.c = column;
+        tile.textContent = value;
+      }
+
+      // Position a tile at the correct pixel coordinates
+      function positionTile(tile, row, column) {
+        const position = getTilePosition(row, column);
+        tile.style.left = `${position.left}px`;
+        tile.style.top = `${position.top}px`;
+        tile.style.width = `${tileSize}px`;
+        tile.style.height = `${tileSize}px`;
+      }
+
+      // Apply visual styles to a tile (correct position, hints, etc.)
+      function applyTileStyles(tile, row, column, value, hintPosition) {
+        tile.className = 'tile';
+        
+        // Check if tile is in correct position
+        const correctValue = row * puzzleSize + column + 1;
+        if (value === correctValue) {
+          tile.classList.add('correct');
+        }
+        
+        // Check if tile should show hint
+        if (hintPosition && hintPosition.row === row && hintPosition.column === column) {
+          tile.classList.add('hint');
+        }
+      }
+
+      // Handle tile click events
+      function handleTileClick(event) {
         if (isAnimating) return; // Prevent clicks during animation
         
-        const r = parseInt(e.currentTarget.dataset.r);
-        const c = parseInt(e.currentTarget.dataset.c);
+        const clickedRow = parseInt(event.currentTarget.dataset.r);
+        const clickedColumn = parseInt(event.currentTarget.dataset.c);
         
-        if(Math.abs(r-emptyPos.r)+Math.abs(c-emptyPos.c)===1){
-          animateMove(e.currentTarget, r, c, emptyPos.r, emptyPos.c);
+        if (isTileAdjacentToEmpty(clickedRow, clickedColumn)) {
+          animateTileMove(event.currentTarget, clickedRow, clickedColumn);
         }
       }
 
-      function animateMove(tile, fromR, fromC, toR, toC) {
+      // Check if a tile is adjacent to the empty space
+      function isTileAdjacentToEmpty(row, column) {
+        const rowDistance = Math.abs(row - emptyTilePosition.row);
+        const columnDistance = Math.abs(column - emptyTilePosition.column);
+        return rowDistance + columnDistance === 1;
+      }
+
+      // Animate a tile moving to the empty space
+      function animateTileMove(tileElement, fromRow, fromColumn) {
         isAnimating = true;
         
-        // Add moving class for better animation
-        tile.classList.add('moving');
+        // Add animation class
+        tileElement.classList.add('moving');
         
-        // Calculate target position
-        const targetPos = getPosition(toR, toC);
+        // Calculate target position (where empty space is)
+        const targetPosition = getTilePosition(emptyTilePosition.row, emptyTilePosition.column);
         
-        // Start animation
-        tile.style.left = `${targetPos.left}px`;
-        tile.style.top = `${targetPos.top}px`;
+        // Start the animation
+        tileElement.style.left = `${targetPosition.left}px`;
+        tileElement.style.top = `${targetPosition.top}px`;
         
-        // Wait for animation to complete
+        // Wait for animation to complete, then update game state
         setTimeout(() => {
-          // Update board state
-          swap(emptyPos, {r: fromR, c: fromC});
-          emptyPos = {r: fromR, c: fromC};
-          
-          moveCountEl.textContent = ++moveCount;
-          
-          // Remove moving class
-          tile.classList.remove('moving');
-          
-          // Re-render to update positions and check for completion
-          render();
-          
-          if(isSolved()){
-            clearInterval(timerInterval);
-            dialogMoves.textContent = moveCount;
-            dialogTime.textContent = timerEl.textContent;
-            dialog.classList.remove('hidden');
-          }
-          
-          isAnimating = false;
-        }, 300); // Match the CSS transition duration
+          completeTileMove(tileElement, fromRow, fromColumn);
+        }, 300); // Match CSS transition duration
       }
 
-      function getNeighbors(r,c){ return [{r:-1,c:0},{r:1,c:0},{r:0,c:-1},{r:0,c:1}].map(d=>({r:r+d.r,c:c+d.c})).filter(p=>p.r>=0&&p.r<size&&p.c>=0&&p.c<size); }
-      function swap(a,b){ [board[a.r][a.c],board[b.r][b.c]]=[board[b.r][b.c],board[a.r][a.c]]; }
-      function isSolved(){ return board.every((row,i)=>row.every((v,j)=>v===((i*size+j+1)%(size*size)))); }
-      function startTimer(){ const start=Date.now(); timerInterval=setInterval(()=>{ const d=Date.now()-start; timerEl.textContent=`${String(Math.floor(d/60000)).padStart(2,'0')}:${String(Math.floor((d/1000)%60)).padStart(2,'0')}`; },1000); }
-
-      function findNextMove(arr,n){
-        const manh=a=>a.reduce((s,v,i)=>v?s+Math.abs(Math.floor(i/n)-Math.floor((v-1)/n))+Math.abs(i%n-((v-1)%n)):s,0);
-        const dirs=[{r:-1,c:0},{r:1,c:0},{r:0,c:-1},{r:0,c:1}];
-        let bound=manh(arr),path=[];
-        function dfs(st,zr,zc,g,prev){
-          const h=manh(st),f=g+h; if(f>bound) return f; if(h===0) return 'FOUND'; let min=Infinity;
-          for(let dir=0;dir<4;dir++){
-            if(prev>=0&&(prev^1)===dir) continue;
-            const nr=zr+dirs[dir].r,nc=zc+dirs[dir].c;
-            if(nr<0||nr>=n||nc<0||nc>=n) continue;
-            const idx0=zr*n+zc,idx1=nr*n+nc; const next=st.slice(); [next[idx0],next[idx1]]=[next[idx1],next[idx0]];
-            const t=dfs(next,nr,nc,g+1,dir); if(t==='FOUND'){ if(g===0) path.push({r:nr,c:nc}); return 'FOUND'; } if(typeof t==='number'&&t<min) min=t;
-          }
-          return min;
+      // Complete the tile move after animation finishes
+      function completeTileMove(tileElement, fromRow, fromColumn) {
+        // Update game board
+        swapTiles(emptyTilePosition, { row: fromRow, column: fromColumn });
+        emptyTilePosition = { row: fromRow, column: fromColumn };
+        
+        // Update move counter
+        moveCount++;
+        moveCountElement.textContent = moveCount;
+        
+        // Remove animation class
+        tileElement.classList.remove('moving');
+        
+        // Re-render puzzle
+        renderPuzzle();
+        
+        // Check if puzzle is solved
+        if (isPuzzleSolved()) {
+          handlePuzzleCompletion();
         }
-        const stArr=arr.slice(),zIdx=stArr.indexOf(0),zr0=Math.floor(zIdx/n),zc0=zIdx%n;
-        while(true){ const t=dfs(stArr,zr0,zc0,0,-1); if(t==='FOUND') break; if(t===Infinity) return null; bound=t; }
-        return path[0];
+        
+        isAnimating = false;
       }
 
-      function computeGreedyHint(){
-        const flat=board.flat(),manh=a=>a.reduce((s,v,i)=>v?s+Math.abs(Math.floor(i/size)-Math.floor((v-1)/size))+Math.abs(i%size-((v-1)%size)):s,0);
-        let best=null,bestH=Infinity;
-        getNeighbors(emptyPos.r,emptyPos.c).forEach(p=>{
-          const copy=flat.slice(),i0=emptyPos.r*size+emptyPos.c,i1=p.r*size+p.c; [copy[i0],copy[i1]]=[copy[i1],copy[i0]];
-          const h=manh(copy); if(h<bestH){bestH=h;best=p;}
+      // Get all positions adjacent to a given position
+      function getAdjacentPositions(row, column) {
+        const directions = [
+          { row: -1, column: 0 }, // up
+          { row: 1, column: 0 },  // down
+          { row: 0, column: -1 }, // left
+          { row: 0, column: 1 }   // right
+        ];
+        
+        return directions
+          .map(direction => ({
+            row: row + direction.row,
+            column: column + direction.column
+          }))
+          .filter(position => 
+            position.row >= 0 && position.row < puzzleSize &&
+            position.column >= 0 && position.column < puzzleSize
+          );
+      }
+
+      // Swap two tiles on the board
+      function swapTiles(position1, position2) {
+        const temp = gameBoard[position1.row][position1.column];
+        gameBoard[position1.row][position1.column] = gameBoard[position2.row][position2.column];
+        gameBoard[position2.row][position2.column] = temp;
+      }
+
+      // Check if the puzzle is solved
+      function isPuzzleSolved() {
+        for (let row = 0; row < puzzleSize; row++) {
+          for (let column = 0; column < puzzleSize; column++) {
+            const expectedValue = (row * puzzleSize + column + 1) % (puzzleSize * puzzleSize);
+            if (gameBoard[row][column] !== expectedValue) {
+              return false;
+            }
+          }
+        }
+        return true;
+      }
+
+      // Handle puzzle completion
+      function handlePuzzleCompletion() {
+        clearInterval(gameTimer);
+        dialogMovesElement.textContent = moveCount;
+        dialogTimeElement.textContent = timerElement.textContent;
+        completionDialog.classList.remove('hidden');
+      }
+
+      // Start the game timer
+      function startGameTimer() {
+        const startTime = Date.now();
+        gameTimer = setInterval(() => {
+          const elapsedTime = Date.now() - startTime;
+          const minutes = Math.floor(elapsedTime / 60000);
+          const seconds = Math.floor((elapsedTime / 1000) % 60);
+          timerElement.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }, 1000);
+      }
+
+      // Find the best hint position using AI solver
+      function findBestHintPosition() {
+        const flatBoard = gameBoard.flat();
+        const optimalMove = findOptimalNextMove(flatBoard, puzzleSize);
+        return optimalMove || findGreedyHintMove();
+      }
+
+      // Find optimal next move using IDA* algorithm
+      function findOptimalNextMove(boardArray, size) {
+        const calculateManhattanDistance = (array) => {
+          return array.reduce((total, value, index) => {
+            if (value === 0) return total;
+            const currentRow = Math.floor(index / size);
+            const currentColumn = index % size;
+            const targetRow = Math.floor((value - 1) / size);
+            const targetColumn = (value - 1) % size;
+            return total + Math.abs(currentRow - targetRow) + Math.abs(currentColumn - targetColumn);
+          }, 0);
+        };
+
+        const directions = [
+          { row: -1, column: 0 }, // up
+          { row: 1, column: 0 },  // down
+          { row: 0, column: -1 }, // left
+          { row: 0, column: 1 }   // right
+        ];
+
+        let searchBound = calculateManhattanDistance(boardArray);
+        const solutionPath = [];
+
+        function depthFirstSearch(currentState, emptyRow, emptyColumn, depth, previousDirection) {
+          const heuristic = calculateManhattanDistance(currentState);
+          const totalCost = depth + heuristic;
+          
+          if (totalCost > searchBound) return totalCost;
+          if (heuristic === 0) return 'FOUND';
+          
+          let minCost = Infinity;
+          
+          for (let directionIndex = 0; directionIndex < 4; directionIndex++) {
+            // Avoid moving back to previous position
+            if (previousDirection >= 0 && (previousDirection ^ 1) === directionIndex) continue;
+            
+            const newRow = emptyRow + directions[directionIndex].row;
+            const newColumn = emptyColumn + directions[directionIndex].column;
+            
+            // Check bounds
+            if (newRow < 0 || newRow >= size || newColumn < 0 || newColumn >= size) continue;
+            
+            // Create new state by swapping
+            const emptyIndex = emptyRow * size + emptyColumn;
+            const newIndex = newRow * size + newColumn;
+            const nextState = currentState.slice();
+            [nextState[emptyIndex], nextState[newIndex]] = [nextState[newIndex], nextState[emptyIndex]];
+            
+            const result = depthFirstSearch(nextState, newRow, newColumn, depth + 1, directionIndex);
+            
+            if (result === 'FOUND') {
+              if (depth === 0) {
+                solutionPath.push({ row: newRow, column: newColumn });
+              }
+              return 'FOUND';
+            }
+            
+            if (typeof result === 'number' && result < minCost) {
+              minCost = result;
+            }
+          }
+          
+          return minCost;
+        }
+
+        // Find empty position
+        const emptyIndex = boardArray.indexOf(0);
+        const emptyRow = Math.floor(emptyIndex / size);
+        const emptyColumn = emptyIndex % size;
+
+        // Iterative deepening search
+        while (true) {
+          const result = depthFirstSearch(boardArray.slice(), emptyRow, emptyColumn, 0, -1);
+          if (result === 'FOUND') break;
+          if (result === Infinity) return null;
+          searchBound = result;
+        }
+
+        return solutionPath[0];
+      }
+
+      // Find greedy hint move when optimal solver fails
+      function findGreedyHintMove() {
+        const flatBoard = gameBoard.flat();
+        const calculateManhattanDistance = (array) => {
+          return array.reduce((total, value, index) => {
+            if (value === 0) return total;
+            const currentRow = Math.floor(index / puzzleSize);
+            const currentColumn = index % puzzleSize;
+            const targetRow = Math.floor((value - 1) / puzzleSize);
+            const targetColumn = (value - 1) % puzzleSize;
+            return total + Math.abs(currentRow - targetRow) + Math.abs(currentColumn - targetColumn);
+          }, 0);
+        };
+
+        let bestMove = null;
+        let bestHeuristic = Infinity;
+        
+        const adjacentPositions = getAdjacentPositions(emptyTilePosition.row, emptyTilePosition.column);
+        
+        adjacentPositions.forEach(position => {
+          const testBoard = flatBoard.slice();
+          const emptyIndex = emptyTilePosition.row * puzzleSize + emptyTilePosition.column;
+          const moveIndex = position.row * puzzleSize + position.column;
+          
+          // Swap to test this move
+          [testBoard[emptyIndex], testBoard[moveIndex]] = [testBoard[moveIndex], testBoard[emptyIndex]];
+          
+          const heuristic = calculateManhattanDistance(testBoard);
+          if (heuristic < bestHeuristic) {
+            bestHeuristic = heuristic;
+            bestMove = position;
+          }
         });
-        return best;
+
+        return bestMove;
       }
 
-      // Handle window resize to recalculate positions
-      window.addEventListener('resize', render);
+      // Handle window resize
+      window.addEventListener('resize', renderPuzzle);
 
-      initGame(size);
+      // Initialize the game
+      initializeGame(puzzleSize);
     })();
   </script>
 </body>
