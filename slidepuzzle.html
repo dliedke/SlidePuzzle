@@ -28,6 +28,7 @@
       display: flex;
       flex-wrap: wrap;
       gap: 0.5rem;
+      justify-content: center;
     }
     .size-btn, #new-btn, #toggle-hints, #dialog-new-btn {
       padding: 0.6rem 1.2rem;
@@ -40,9 +41,14 @@
       background: #3498db;
       color: #fff;
     }
-    .size-btn:hover, #new-btn:hover, #toggle-hints:hover, #dialog-new-btn:hover {
+    .size-btn:hover, #new-btn:hover, #toggle-hints:hover:not(:disabled), #dialog-new-btn:hover {
       transform: scale(1.05);
       box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+    #toggle-hints:disabled {
+      background: #7f8c8d;
+      cursor: not-allowed;
+      opacity: 0.7;
     }
     #puzzle-container {
       position: relative;
@@ -73,8 +79,8 @@
     }
     .tile.moving {
       z-index: 5;
-      transition: left 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
-                  top 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      transition: left 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
+                  top 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
     .hidden {
       background: transparent;
@@ -95,6 +101,16 @@
       font-size: 1rem;
       display: inline-block;
       color: #fff;
+      margin-bottom: 0.5rem;
+    }
+    #hint-info {
+      background: rgba(255,255,255,0.2);
+      padding: 0.4rem 1rem;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      color: #ecf0f1;
+      text-align: center;
+      margin-bottom: 0.5rem;
     }
     #completion-dialog {
       position: fixed;
@@ -121,6 +137,9 @@
       color: #555;
     }
     .dialog-content button { margin-top: 1rem; }
+    /* Smaller font sizes for larger grids */
+    .tile.small-font { font-size: 1.4rem; }
+    .tile.tiny-font { font-size: 1.2rem; }
   </style>
 </head>
 <body>
@@ -128,9 +147,12 @@
   <div id="controls">
     <button class="size-btn" data-size="3">3 × 3</button>
     <button class="size-btn" data-size="4">4 × 4</button>
+    <button class="size-btn" data-size="5">5 × 5</button>
+    <button class="size-btn" data-size="6">6 × 6</button>
     <button id="new-btn">Novo Jogo</button>
     <button id="toggle-hints">Ativar Dicas</button>
   </div>
+  <div id="hint-info" style="display: none;">Dicas não disponíveis para grades 5×5 e 6×6</div>
   <div id="puzzle-container"></div>
   <div id="info">Movimentos: <span id="move-count">0</span> | Tempo: <span id="timer">00:00</span></div>
   <div id="completion-dialog" class="hidden">
@@ -154,6 +176,7 @@
       const dialogMovesElement = document.getElementById('dialog-moves');
       const dialogTimeElement = document.getElementById('dialog-time');
       const dialogNewGameButton = document.getElementById('dialog-new-btn');
+      const hintInfoElement = document.getElementById('hint-info');
 
       // Game State Variables
       let puzzleSize = 3;
@@ -183,6 +206,11 @@
         completionDialog.classList.add('hidden');
       });
 
+      // Check if hints are supported for current puzzle size
+      function areHintsSupported() {
+        return puzzleSize <= 4;
+      }
+
       // Initialize a new game
       function initializeGame(newSize) {
         puzzleSize = newSize;
@@ -192,6 +220,17 @@
         moveCountElement.textContent = '0';
         timerElement.textContent = '00:00';
         isAnimating = false;
+        
+        // Disable hints for larger grids
+        if (!areHintsSupported()) {
+          hintsEnabled = false;
+          toggleHintsButton.disabled = true;
+          hintInfoElement.style.display = 'block';
+        } else {
+          toggleHintsButton.disabled = false;
+          hintInfoElement.style.display = 'none';
+        }
+        
         updateHintsButtonText();
         completionDialog.classList.add('hidden');
         
@@ -216,7 +255,9 @@
 
       // Shuffle the board by making random valid moves
       function shuffleBoard() {
-        for (let i = 0; i < 1000; i++) {
+        // More shuffles for larger grids
+        const shuffleCount = puzzleSize * puzzleSize * 100;
+        for (let i = 0; i < shuffleCount; i++) {
           const possibleMoves = getAdjacentPositions(emptyTilePosition.row, emptyTilePosition.column);
           const randomMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
           swapTiles(emptyTilePosition, randomMove);
@@ -226,6 +267,8 @@
 
       // Toggle hints on/off
       function toggleHints() {
+        if (!areHintsSupported()) return;
+        
         hintsEnabled = !hintsEnabled;
         updateHintsButtonText();
         renderPuzzle();
@@ -233,7 +276,11 @@
 
       // Update the hints button text
       function updateHintsButtonText() {
-        toggleHintsButton.textContent = hintsEnabled ? 'Desativar Dicas' : 'Ativar Dicas';
+        if (!areHintsSupported()) {
+          toggleHintsButton.textContent = 'Dicas Indisponíveis';
+        } else {
+          toggleHintsButton.textContent = hintsEnabled ? 'Desativar Dicas' : 'Ativar Dicas';
+        }
       }
 
       // Calculate tile sizes based on screen size
@@ -260,7 +307,7 @@
         calculateTileSizes();
         removeObsoleteTiles();
         
-        const hintPosition = hintsEnabled ? findBestHintPosition() : null;
+        const hintPosition = (hintsEnabled && areHintsSupported()) ? findBestHintPosition() : null;
 
         // Create or update tiles for each position
         for (let row = 0; row < puzzleSize; row++) {
@@ -332,6 +379,13 @@
       function applyTileStyles(tile, row, column, value, hintPosition) {
         tile.className = 'tile';
         
+        // Add font size class for larger grids
+        if (puzzleSize === 5) {
+          tile.classList.add('small-font');
+        } else if (puzzleSize === 6) {
+          tile.classList.add('tiny-font');
+        }
+        
         // Check if tile is in correct position
         const correctValue = row * puzzleSize + column + 1;
         if (value === correctValue) {
@@ -380,7 +434,7 @@
         // Wait for animation to complete, then update game state
         setTimeout(() => {
           completeTileMove(tileElement, fromRow, fromColumn);
-        }, 300); // Match CSS transition duration
+        }, 200); // Match CSS transition duration
       }
 
       // Complete the tile move after animation finishes
@@ -468,6 +522,9 @@
 
       // Find the best hint position using AI solver
       function findBestHintPosition() {
+        // Return null for larger grids (hints not supported)
+        if (!areHintsSupported()) return null;
+        
         const flatBoard = gameBoard.flat();
         const optimalMove = findOptimalNextMove(flatBoard, puzzleSize);
         return optimalMove || findGreedyHintMove();
@@ -475,6 +532,9 @@
 
       // Find optimal next move using IDA* algorithm
       function findOptimalNextMove(boardArray, size) {
+        // Skip for larger grids
+        if (!areHintsSupported()) return null;
+        
         const calculateManhattanDistance = (array) => {
           return array.reduce((total, value, index) => {
             if (value === 0) return total;
@@ -556,6 +616,9 @@
 
       // Find greedy hint move when optimal solver fails
       function findGreedyHintMove() {
+        // Skip for larger grids
+        if (!areHintsSupported()) return null;
+        
         const flatBoard = gameBoard.flat();
         const calculateManhattanDistance = (array) => {
           return array.reduce((total, value, index) => {
