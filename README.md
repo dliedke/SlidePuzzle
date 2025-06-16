@@ -17,16 +17,16 @@ Um quebra-cabeça deslizante (slide puzzle) em JavaScript, HTML e CSS, com dicas
 2. O jogo carregará automaticamente um tabuleiro 3×3 embaralhado.
 3. Use os botões de controle para:
 
-   * Selecionar tamanho: `3×3` ou `4×4`
+   * Selecionar tamanho: `3×3` ou `4×4` ou `5×5` ou `6×6`
    * Iniciar um **Novo Jogo**
-   * **Ativar/Desativar Dicas**
+   * **Ativar/Desativar Dicas** (somente `3×3` ou `4×4`)
 4. Clique nas peças adjacentes ao espaço vazio para movê-las.
 5. Veja o **contador de tempo** e o número de **movimentos** no canto.
 6. Ao resolver, um diálogo exibirá seu desempenho.
 
 ## 🕹️ Controles
 
-* **3×3 / 4×4**: Redefine o tabuleiro para o tamanho escolhido.
+* **3×3 / 4×4 / 5x5 / 6x6**: Redefine o tabuleiro para o tamanho escolhido.
 * **Novo Jogo**: Embaralha novamente o tabuleiro do tamanho atual.
 * **Ativar Dicas**: Mostra a próxima jogada ideal. Otimizado:
 
