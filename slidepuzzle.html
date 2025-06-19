@@ -30,7 +30,19 @@
       gap: 0.5rem;
       justify-content: center;
     }
-    .size-btn, #new-btn, #toggle-hints, #dialog-new-btn {
+    .control-group {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      background: rgba(0,0,0,0.3);
+      padding: 0.5rem;
+      border-radius: 20px;
+    }
+    .control-label {
+      font-size: 0.9rem;
+      color: #ecf0f1;
+    }
+    .size-btn, #new-btn, #toggle-hints, #dialog-new-btn, .missing-btn {
       padding: 0.6rem 1.2rem;
       font-size: 1rem;
       font-weight: 600;
@@ -41,7 +53,14 @@
       background: #3498db;
       color: #fff;
     }
-    .size-btn:hover, #new-btn:hover, #toggle-hints:hover:not(:disabled), #dialog-new-btn:hover {
+    .missing-btn {
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+    }
+    .missing-btn.active {
+      background: #e74c3c;
+    }
+    .size-btn:hover, #new-btn:hover, #toggle-hints:hover:not(:disabled), #dialog-new-btn:hover, .missing-btn:hover {
       transform: scale(1.05);
       box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     }
@@ -57,6 +76,7 @@
       border-radius: 12px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.5);
       margin-bottom: 1.5rem;
+      overflow: hidden;
     }
     .tile {
       position: absolute;
@@ -72,20 +92,37 @@
       background: linear-gradient(135deg, #4A90E2 0%, #357ABD 100%);
       transition: transform 0.1s, background 0.3s, left 0.3s ease-out, top 0.3s ease-out;
       cursor: pointer;
+      overflow: hidden;
+    }
+    .tile::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255,255,255,0.2);
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
     }
     .tile:hover {
       transform: translateY(-2px);
       box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+    }
+    .tile:hover::before {
+      opacity: 1;
     }
     .tile.moving {
       z-index: 5;
       transition: left 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
                   top 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
-    .hidden {
-      background: transparent;
-      box-shadow: none;
-      visibility: hidden;
+    .empty-space {
+      position: absolute;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.1);
+      border: 2px dashed rgba(255,255,255,0.3);
     }
     .correct {
       background: linear-gradient(135deg, #58D68D 0%, #2ECC71 100%) !important;
@@ -101,15 +138,6 @@
       font-size: 1rem;
       display: inline-block;
       color: #fff;
-      margin-bottom: 0.5rem;
-    }
-    #hint-info {
-      background: rgba(255,255,255,0.2);
-      padding: 0.4rem 1rem;
-      border-radius: 20px;
-      font-size: 0.9rem;
-      color: #ecf0f1;
-      text-align: center;
       margin-bottom: 0.5rem;
     }
     #completion-dialog {
@@ -145,14 +173,25 @@
 <body>
   <h1 id="title">🧩 Quebra-Cabeça 🧩</h1>
   <div id="controls">
-    <button class="size-btn" data-size="3">3 × 3</button>
-    <button class="size-btn" data-size="4">4 × 4</button>
-    <button class="size-btn" data-size="5">5 × 5</button>
-    <button class="size-btn" data-size="6">6 × 6</button>
+    <div class="control-group">
+      <button class="size-btn" data-size="3">3×3</button>
+      <button class="size-btn" data-size="4">4×4</button>
+      <button class="size-btn" data-size="5">5×5</button>
+      <button class="size-btn" data-size="6">6×6</button>
+    </div>
+    <div class="control-group">
+      <span class="control-label">Peças faltando:</span>
+      <button class="missing-btn active" data-missing="1">1</button>
+      <button class="missing-btn" data-missing="2">2</button>
+      <button class="missing-btn" data-missing="3">3</button>
+    </div>
     <button id="new-btn">Novo Jogo</button>
     <button id="toggle-hints">Ativar Dicas</button>
   </div>
-  <div id="hint-info" style="display: none;">Dicas não disponíveis para grades 5×5 e 6×6</div>
+  <div id="hint-info" style="display: none; background: rgba(255,255,255,0.2); padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.9rem; color: #ecf0f1; text-align: center; margin-bottom: 0.5rem;"></div>
+  <div id="direction-hint" style="display: none; background: rgba(255,255,255,0.2); padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.9rem; color: #ecf0f1; text-align: center; margin-bottom: 0.5rem;">
+    💡 Clique na borda da peça para mover nessa direção
+  </div>
   <div id="puzzle-container"></div>
   <div id="info">Movimentos: <span id="move-count">0</span> | Tempo: <span id="timer">00:00</span></div>
   <div id="completion-dialog" class="hidden">
@@ -168,6 +207,7 @@
       // DOM Elements
       const puzzleContainer = document.getElementById('puzzle-container');
       const sizeButtons = document.querySelectorAll('.size-btn');
+      const missingButtons = document.querySelectorAll('.missing-btn');
       const newGameButton = document.getElementById('new-btn');
       const toggleHintsButton = document.getElementById('toggle-hints');
       const moveCountElement = document.getElementById('move-count');
@@ -176,11 +216,12 @@
       const dialogMovesElement = document.getElementById('dialog-moves');
       const dialogTimeElement = document.getElementById('dialog-time');
       const dialogNewGameButton = document.getElementById('dialog-new-btn');
-      const hintInfoElement = document.getElementById('hint-info');
+      const directionHintElement = document.getElementById('direction-hint');
 
       // Game State Variables
       let puzzleSize = 3;
       let gameBoard = [];
+      let emptyPositions = []; // Array of empty positions
       let emptyTilePosition = { row: 0, column: 0 };
       let moveCount = 0;
       let gameTimer = null;
@@ -193,75 +234,162 @@
       sizeButtons.forEach(button => {
         button.addEventListener('click', () => {
           const newSize = parseInt(button.dataset.size);
-          initializeGame(newSize);
+          const currentMissing = parseInt(document.querySelector('.missing-btn.active').dataset.missing);
+          initializeGame(newSize, currentMissing);
         });
       });
 
-      newGameButton.addEventListener('click', () => initializeGame(puzzleSize));
+      missingButtons.forEach(button => {
+        button.addEventListener('click', () => {
+          missingButtons.forEach(btn => btn.classList.remove('active'));
+          button.classList.add('active');
+          const newMissingPieces = parseInt(button.dataset.missing);
+          initializeGame(puzzleSize, newMissingPieces);
+        });
+      });
+
+      newGameButton.addEventListener('click', () => {
+        const currentSize = puzzleSize;
+        const currentMissing = parseInt(document.querySelector('.missing-btn.active').dataset.missing);
+        initializeGame(currentSize, currentMissing);
+      });
       
       toggleHintsButton.addEventListener('click', toggleHints);
       
       dialogNewGameButton.addEventListener('click', () => {
-        initializeGame(puzzleSize);
+        const currentSize = puzzleSize;
+        const currentMissing = parseInt(document.querySelector('.missing-btn.active').dataset.missing);
+        initializeGame(currentSize, currentMissing);
         completionDialog.classList.add('hidden');
       });
 
-      // Check if hints are supported for current puzzle size
+      // Check if hints are supported for current puzzle size and missing pieces
       function areHintsSupported() {
-        return puzzleSize <= 4;
+        return puzzleSize <= 4 && getCurrentMissingPieces() === 1;
+      }
+      
+      // Get current number of missing pieces
+      function getCurrentMissingPieces() {
+        const activeMissingBtn = document.querySelector('.missing-btn.active');
+        return activeMissingBtn ? parseInt(activeMissingBtn.dataset.missing) : 1;
       }
 
       // Initialize a new game
-      function initializeGame(newSize) {
+      function initializeGame(newSize, missingPieces) {
         puzzleSize = newSize;
+        
+      // Ensure missing pieces doesn't exceed board size
+      const totalTiles = puzzleSize * puzzleSize;
+      const maxMissing = totalTiles - 1; 
+      missingPieces = Math.max(1, Math.min(missingPieces, maxMissing));
+
+        
         clearInterval(gameTimer);
         gameBoard = [];
+        emptyPositions = [];
         moveCount = 0;
         moveCountElement.textContent = '0';
         timerElement.textContent = '00:00';
         isAnimating = false;
         
-        // Disable hints for larger grids
+        // Clear the puzzle container
+        puzzleContainer.innerHTML = '';
+        
+        // Disable hints for larger grids or multiple missing pieces
         if (!areHintsSupported()) {
           hintsEnabled = false;
           toggleHintsButton.disabled = true;
-          hintInfoElement.style.display = 'block';
         } else {
           toggleHintsButton.disabled = false;
-          hintInfoElement.style.display = 'none';
+        }
+        
+        // Show direction hint for multiple missing pieces
+        if (missingPieces > 1) {
+          directionHintElement.style.display = 'block';
+        } else {
+          directionHintElement.style.display = 'none';
         }
         
         updateHintsButtonText();
         completionDialog.classList.add('hidden');
         
-        createSolvedBoard();
+        createSolvedBoard(missingPieces);
         shuffleBoard();
+        validateBoardState(missingPieces); // Ensure board is valid
         startGameTimer();
         renderPuzzle();
       }
 
+      // Validate that board state is consistent
+      function validateBoardState(missingPieces) {
+        // Rebuild empty positions array from board
+        emptyPositions = [];
+        for (let row = 0; row < puzzleSize; row++) {
+          for (let column = 0; column < puzzleSize; column++) {
+            if (gameBoard[row] && gameBoard[row][column] === 0) {
+              emptyPositions.push({ row, column });
+            }
+          }
+        }
+        
+        // Ensure we have the correct number of empty positions
+        if (emptyPositions.length !== missingPieces) {
+          console.error(`Invalid board state: expected ${missingPieces} empty positions but found ${emptyPositions.length}`);
+        }
+      }
+
       // Create the initial solved board
-      function createSolvedBoard() {
+      function createSolvedBoard(missingPieces) {
+        // Clear empty positions array
+        emptyPositions = [];
+        
+        let tileNumber = 1;
+        const totalTiles = puzzleSize * puzzleSize;
+        const maxTileNumber = totalTiles - missingPieces;
+        
+        // First, fill the board with sequential numbers
         for (let row = 0; row < puzzleSize; row++) {
           gameBoard[row] = [];
           for (let column = 0; column < puzzleSize; column++) {
-            gameBoard[row][column] = row * puzzleSize + column + 1;
+            const index = row * puzzleSize + column;
+            if (index < maxTileNumber) {
+              gameBoard[row][column] = tileNumber++;
+            } else {
+              gameBoard[row][column] = 0; // Empty space
+              emptyPositions.push({ row, column });
+            }
           }
         }
-        // Set the last tile as empty (0)
-        gameBoard[puzzleSize - 1][puzzleSize - 1] = 0;
-        emptyTilePosition = { row: puzzleSize - 1, column: puzzleSize - 1 };
       }
 
       // Shuffle the board by making random valid moves
       function shuffleBoard() {
-        // More shuffles for larger grids
-        const shuffleCount = puzzleSize * puzzleSize * 100;
+        // More shuffles for larger grids and multiple empty spaces
+        const shuffleCount = puzzleSize * puzzleSize * 50 * emptyPositions.length;
+        
         for (let i = 0; i < shuffleCount; i++) {
-          const possibleMoves = getAdjacentPositions(emptyTilePosition.row, emptyTilePosition.column);
-          const randomMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
-          swapTiles(emptyTilePosition, randomMove);
-          emptyTilePosition = { row: randomMove.row, column: randomMove.column };
+          // Pick a random empty position
+          const randomEmptyIndex = Math.floor(Math.random() * emptyPositions.length);
+          const emptyPos = { ...emptyPositions[randomEmptyIndex] }; // Copy to avoid reference issues
+          
+          // Get possible moves for this empty position
+          const possibleMoves = getAdjacentPositions(emptyPos.row, emptyPos.column)
+            .filter(pos => {
+              // Ensure position is valid and tile exists
+              return gameBoard[pos.row] && 
+                     gameBoard[pos.row][pos.column] !== undefined && 
+                     gameBoard[pos.row][pos.column] !== 0;
+            });
+          
+          if (possibleMoves.length > 0) {
+            const randomMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+            
+            // Swap the tile with the empty space
+            swapTiles(emptyPos, randomMove);
+            
+            // Update empty positions array
+            emptyPositions[randomEmptyIndex] = { row: randomMove.row, column: randomMove.column };
+          }
         }
       }
 
@@ -285,66 +413,130 @@
 
       // Calculate tile sizes based on screen size
       function calculateTileSizes() {
-        const containerPadding = 8;
-        const maxContainerSize = Math.min(window.innerWidth, window.innerHeight) * 0.8;
-        const availableSpace = maxContainerSize - containerPadding * 2;
-        tileSize = (availableSpace - tileGap * (puzzleSize - 1)) / puzzleSize;
+        const containerPadding = 16; // Total padding (8px on each side)
+        const viewportSize = Math.min(window.innerWidth - 40, window.innerHeight - 200); // Account for UI elements
+        const maxContainerSize = Math.min(viewportSize, 600); // Cap at 600px
+        const availableSpace = maxContainerSize - containerPadding;
         
-        puzzleContainer.style.width = `${maxContainerSize}px`;
-        puzzleContainer.style.height = `${maxContainerSize}px`;
+        // Calculate tile size ensuring gap between tiles
+        tileSize = Math.floor((availableSpace - tileGap * (puzzleSize - 1)) / puzzleSize);
+        
+        // Recalculate container size based on actual tile size
+        const actualContainerSize = (tileSize * puzzleSize) + (tileGap * (puzzleSize - 1)) + containerPadding;
+        
+        puzzleContainer.style.width = `${actualContainerSize}px`;
+        puzzleContainer.style.height = `${actualContainerSize}px`;
       }
 
       // Get the pixel position for a tile at given row/column
       function getTilePosition(row, column) {
         return {
-          left: tileGap + column * (tileSize + tileGap),
-          top: tileGap + row * (tileSize + tileGap)
+          left: 8 + column * (tileSize + tileGap), // 8px padding
+          top: 8 + row * (tileSize + tileGap)      // 8px padding
         };
       }
 
       // Render the entire puzzle
       function renderPuzzle() {
         calculateTileSizes();
-        removeObsoleteTiles();
         
-        const hintPosition = (hintsEnabled && areHintsSupported()) ? findBestHintPosition() : null;
+        // First pass: remove all obsolete elements
+        removeObsoleteTiles();
 
-        // Create or update tiles for each position
+        // Find the best hint position if hints are enabled and puzzle is not solved
+         const hintPosition = (hintsEnabled && areHintsSupported() && !isPuzzleSolved())
+                              ? findBestHintPosition()
+                              : null;
+
+        // Second pass: create or update tiles and empty spaces
         for (let row = 0; row < puzzleSize; row++) {
           for (let column = 0; column < puzzleSize; column++) {
             const tileValue = gameBoard[row][column];
-            if (tileValue === 0) continue; // Skip empty space
-
-            let tileElement = findExistingTile(row, column);
             
-            if (!tileElement) {
-              tileElement = createNewTile(row, column, tileValue);
+            if (tileValue === 0) {
+              // Render empty space
+              renderEmptySpace(row, column);
             } else {
-              updateExistingTile(tileElement, row, column, tileValue);
-            }
+              // Render tile
+              let tileElement = findExistingTile(row, column);
+              
+              if (!tileElement) {
+                tileElement = createNewTile(row, column, tileValue);
+              } else {
+                updateExistingTile(tileElement, row, column, tileValue);
+              }
 
-            positionTile(tileElement, row, column);
-            applyTileStyles(tileElement, row, column, tileValue, hintPosition);
+              positionTile(tileElement, row, column);
+              applyTileStyles(tileElement, row, column, tileValue, hintPosition);
+            }
           }
         }
+        
+        // Final cleanup: remove any elements that shouldn't exist
+        const allElements = puzzleContainer.querySelectorAll('.tile, .empty-space');
+        allElements.forEach(element => {
+          const row = parseInt(element.dataset.r);
+          const column = parseInt(element.dataset.c);
+          
+          if (isNaN(row) || isNaN(column) || row >= puzzleSize || column >= puzzleSize || row < 0 || column < 0) {
+            element.remove();
+          }
+        });
       }
 
-      // Remove tiles that no longer exist on the board
+      // Render an empty space indicator
+      function renderEmptySpace(row, column) {
+        let emptyElement = puzzleContainer.querySelector(`.empty-space[data-r="${row}"][data-c="${column}"]`);
+        
+        if (!emptyElement) {
+          emptyElement = document.createElement('div');
+          emptyElement.className = 'empty-space';
+          emptyElement.dataset.r = row;
+          emptyElement.dataset.c = column;
+          puzzleContainer.appendChild(emptyElement);
+        }
+        
+        const position = getTilePosition(row, column);
+        emptyElement.style.left = `${position.left}px`;
+        emptyElement.style.top = `${position.top}px`;
+        emptyElement.style.width = `${tileSize}px`;
+        emptyElement.style.height = `${tileSize}px`;
+      }
+
+      // Remove tiles and empty spaces that no longer exist on the board
       function removeObsoleteTiles() {
-        const currentTiles = puzzleContainer.querySelectorAll('.tile');
-        currentTiles.forEach(tile => {
-          const row = parseInt(tile.dataset.r);
-          const column = parseInt(tile.dataset.c);
-          const tileValue = gameBoard[row] && gameBoard[row][column];
-          if (!tileValue || tileValue === 0) {
-            tile.remove();
+        const currentElements = puzzleContainer.querySelectorAll('.tile, .empty-space');
+        currentElements.forEach(element => {
+          const row = parseInt(element.dataset.r);
+          const column = parseInt(element.dataset.c);
+          
+          // Check if position is valid
+          if (isNaN(row) || isNaN(column) || row < 0 || row >= puzzleSize || column < 0 || column >= puzzleSize) {
+            element.remove();
+            return;
+          }
+          
+          // Check if the board position exists
+          if (!gameBoard[row] || gameBoard[row][column] === undefined) {
+            element.remove();
+            return;
+          }
+          
+          // Remove tiles that should be empty spaces
+          if (element.classList.contains('tile') && gameBoard[row][column] === 0) {
+            element.remove();
+          }
+          
+          // Remove empty spaces that should be tiles
+          if (element.classList.contains('empty-space') && gameBoard[row][column] !== 0) {
+            element.remove();
           }
         });
       }
 
       // Find existing tile element for given position
       function findExistingTile(row, column) {
-        return puzzleContainer.querySelector(`[data-r="${row}"][data-c="${column}"]`);
+        return puzzleContainer.querySelector(`.tile[data-r="${row}"][data-c="${column}"]`);
       }
 
       // Create a new tile element
@@ -388,7 +580,8 @@
         
         // Check if tile is in correct position
         const correctValue = row * puzzleSize + column + 1;
-        if (value === correctValue) {
+        const maxValue = puzzleSize * puzzleSize - emptyPositions.length;
+        if (value === correctValue && correctValue <= maxValue) {
           tile.classList.add('correct');
         }
         
@@ -402,30 +595,91 @@
       function handleTileClick(event) {
         if (isAnimating) return; // Prevent clicks during animation
         
-        const clickedRow = parseInt(event.currentTarget.dataset.r);
-        const clickedColumn = parseInt(event.currentTarget.dataset.c);
+        const tile = event.currentTarget;
+        const clickedRow = parseInt(tile.dataset.r);
+        const clickedColumn = parseInt(tile.dataset.c);
         
-        if (isTileAdjacentToEmpty(clickedRow, clickedColumn)) {
-          animateTileMove(event.currentTarget, clickedRow, clickedColumn);
+        // Get click position relative to tile
+        const rect = tile.getBoundingClientRect();
+        const clickX = event.clientX - rect.left;
+        const clickY = event.clientY - rect.top;
+        const tileWidth = rect.width;
+        const tileHeight = rect.height;
+        
+        // Determine preferred direction based on click position
+        const horizontalRatio = clickX / tileWidth;
+        const verticalRatio = clickY / tileHeight;
+        
+        let preferredDirection = null;
+        
+        // Determine which edge of the tile was clicked closest to
+        const leftDistance = horizontalRatio;
+        const rightDistance = 1 - horizontalRatio;
+        const topDistance = verticalRatio;
+        const bottomDistance = 1 - verticalRatio;
+        
+        const minDistance = Math.min(leftDistance, rightDistance, topDistance, bottomDistance);
+        
+        if (minDistance === leftDistance) {
+          preferredDirection = { row: 0, column: -1 }; // Move left
+        } else if (minDistance === rightDistance) {
+          preferredDirection = { row: 0, column: 1 }; // Move right
+        } else if (minDistance === topDistance) {
+          preferredDirection = { row: -1, column: 0 }; // Move up
+        } else {
+          preferredDirection = { row: 1, column: 0 }; // Move down
+        }
+        
+        // Try to find empty position in preferred direction
+        const targetEmpty = findEmptyInDirection(clickedRow, clickedColumn, preferredDirection);
+        
+        if (targetEmpty) {
+          animateTileMove(tile, clickedRow, clickedColumn, targetEmpty);
         }
       }
 
-      // Check if a tile is adjacent to the empty space
-      function isTileAdjacentToEmpty(row, column) {
-        const rowDistance = Math.abs(row - emptyTilePosition.row);
-        const columnDistance = Math.abs(column - emptyTilePosition.column);
-        return rowDistance + columnDistance === 1;
+      // Find an adjacent empty position for a tile
+      function findAdjacentEmptyPosition(row, column) {
+        for (const emptyPos of emptyPositions) {
+          const rowDistance = Math.abs(row - emptyPos.row);
+          const columnDistance = Math.abs(column - emptyPos.column);
+          if (rowDistance + columnDistance === 1) {
+            return emptyPos;
+          }
+        }
+        return null;
       }
 
-      // Animate a tile moving to the empty space
-      function animateTileMove(tileElement, fromRow, fromColumn) {
+      // Find empty position in a specific direction, fallback to any adjacent
+      function findEmptyInDirection(row, column, preferredDirection) {
+        // First, try the preferred direction
+        const preferredRow = row + preferredDirection.row;
+        const preferredColumn = column + preferredDirection.column;
+        
+        // Check if preferred position is within bounds
+        if (preferredRow >= 0 && preferredRow < puzzleSize && 
+            preferredColumn >= 0 && preferredColumn < puzzleSize) {
+          // Check if preferred position is empty
+          for (const emptyPos of emptyPositions) {
+            if (emptyPos.row === preferredRow && emptyPos.column === preferredColumn) {
+              return emptyPos;
+            }
+          }
+        }
+        
+        // If preferred direction not available, fall back to any adjacent empty
+        return findAdjacentEmptyPosition(row, column);
+      }
+
+      // Animate a tile moving to an empty space
+      function animateTileMove(tileElement, fromRow, fromColumn, targetEmpty) {
         isAnimating = true;
         
         // Add animation class
         tileElement.classList.add('moving');
         
-        // Calculate target position (where empty space is)
-        const targetPosition = getTilePosition(emptyTilePosition.row, emptyTilePosition.column);
+        // Calculate target position
+        const targetPosition = getTilePosition(targetEmpty.row, targetEmpty.column);
         
         // Start the animation
         tileElement.style.left = `${targetPosition.left}px`;
@@ -433,15 +687,22 @@
         
         // Wait for animation to complete, then update game state
         setTimeout(() => {
-          completeTileMove(tileElement, fromRow, fromColumn);
+          completeTileMove(tileElement, fromRow, fromColumn, targetEmpty);
         }, 200); // Match CSS transition duration
       }
 
       // Complete the tile move after animation finishes
-      function completeTileMove(tileElement, fromRow, fromColumn) {
+      function completeTileMove(tileElement, fromRow, fromColumn, targetEmpty) {
         // Update game board
-        swapTiles(emptyTilePosition, { row: fromRow, column: fromColumn });
-        emptyTilePosition = { row: fromRow, column: fromColumn };
+        swapTiles(targetEmpty, { row: fromRow, column: fromColumn });
+        
+        // Update empty positions array
+        const emptyIndex = emptyPositions.findIndex(pos => 
+          pos.row === targetEmpty.row && pos.column === targetEmpty.column
+        );
+        if (emptyIndex !== -1) {
+          emptyPositions[emptyIndex] = { row: fromRow, column: fromColumn };
+        }
         
         // Update move counter
         moveCount++;
@@ -490,11 +751,21 @@
 
       // Check if the puzzle is solved
       function isPuzzleSolved() {
+        let expectedValue = 1;
+        const maxValue = puzzleSize * puzzleSize - emptyPositions.length;
+        
         for (let row = 0; row < puzzleSize; row++) {
           for (let column = 0; column < puzzleSize; column++) {
-            const expectedValue = (row * puzzleSize + column + 1) % (puzzleSize * puzzleSize);
-            if (gameBoard[row][column] !== expectedValue) {
-              return false;
+            if (expectedValue <= maxValue) {
+              if (gameBoard[row][column] !== expectedValue) {
+                return false;
+              }
+              expectedValue++;
+            } else {
+              // Remaining positions should be empty
+              if (gameBoard[row][column] !== 0) {
+                return false;
+              }
             }
           }
         }
@@ -520,7 +791,7 @@
         }, 1000);
       }
 
-      // Find the best hint position using AI solver
+     // Find the best hint position using AI solver
       function findBestHintPosition() {
         // Return null for larger grids (hints not supported)
         if (!areHintsSupported()) return null;
@@ -655,10 +926,14 @@
       }
 
       // Handle window resize
-      window.addEventListener('resize', renderPuzzle);
+      window.addEventListener('resize', () => {
+        if (!isAnimating) {
+          renderPuzzle();
+        }
+      });
 
       // Initialize the game
-      initializeGame(puzzleSize);
+      initializeGame(3, 1); // Start with 3x3 grid and 1 missing piece
     })();
   </script>
 </body>
